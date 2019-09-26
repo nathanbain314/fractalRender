@@ -1,6 +1,7 @@
 #include "Mandelbox.h"
 #include "progress_bar.hpp"
 
+__device__
 int equiProject( double* d, int backgroundWidth, int backgroundHeight )
 {
   double x = d[0];
@@ -19,16 +20,19 @@ int equiProject( double* d, int backgroundWidth, int backgroundHeight )
   return i * backgroundWidth + j;
 }
 
+__device__
 double interpolate(double r1, double r2, double a)
 {
   return (1 - a) * r1 + a * r2;
 }
 
+__device__
 double length( double* z )
 {
   return sqrt(z[0]*z[0] + z[1]*z[1] + z[2]*z[2]);
 }
 
+__device__
 void crossProduct( double* a, double* b, double* c )
 {
   c[0] = a[1]*b[2] - a[2]*b[1];
@@ -36,6 +40,7 @@ void crossProduct( double* a, double* b, double* c )
   c[2] = a[0]*b[1] - a[1]*b[0];
 }
 
+__device__
 double dotProduct( double* a, double* b )
 {
   return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
@@ -46,6 +51,7 @@ double dotProduct( double* a, double* b )
 
 
 // Mandelbulb
+__device__
 double MandelbulbDE( double* z, double n )
 {
   z[2] *= -1;
@@ -88,6 +94,7 @@ double MandelbulbDE( double* z, double n )
 }
 
 // Mandelbox
+__device__
 double MandelboxDE( double* z1, double scale )
 {
   double sideLength = (scale < -1 ? 4 : 4*(scale+1)/(scale-1))*1.25;
@@ -149,6 +156,7 @@ double MandelboxDE( double* z1, double scale )
 
 
 // Menger
+__device__
 double MengerDE( double* point, double n10 )
 {
   int n = 6;
@@ -176,6 +184,7 @@ double MengerDE( double* point, double n10 )
 }
 
 
+__device__
 double de( double* z, double value, int fractalType )
 {
   switch( fractalType )
@@ -193,6 +202,7 @@ double de( double* z, double value, int fractalType )
 
 
 
+__device__
 void normalize( double* n )
 {
   double l = length( n );
@@ -203,6 +213,7 @@ void normalize( double* n )
   }
 }
 
+__device__
 void computeNormal( double* p, double* d, double value, int fractalType, double *n )
 {
   double t[3];
@@ -227,6 +238,7 @@ void computeNormal( double* p, double* d, double value, int fractalType, double 
   normalize( n );
 }
 
+__device__
 void coneSample( double* n, double* seed, double extent )
 {
   double t[3];
@@ -278,6 +290,7 @@ void coneSample( double* n, double* seed, double extent )
   normalize(n);
 }
 
+__device__
 void randomFromNormal( double* n, double* seed )
 {
   double t[3];
@@ -329,6 +342,7 @@ void randomFromNormal( double* n, double* seed )
   normalize(n);
 }
 
+__device__
 void reflect( double* d, double* n )
 {
   double v = 2.0 * dotProduct( d, n );
@@ -339,6 +353,7 @@ void reflect( double* d, double* n )
   normalize(d);
 }
 
+__device__
 bool findHit( double *p, double* d, double value, int fractalType, double minSize, double* output )
 {
   while( abs(p[0]) < 15 && abs(p[1]) < 15 && abs(p[2]) < 15 )
@@ -368,8 +383,10 @@ bool findHit( double *p, double* d, double value, int fractalType, double minSiz
   return false;
 }
 
-void generateMandelboxPoint( int start, int stride, int idx1, int aliasIndex, int numAlias, int bx, int by, int xSize, int ySize, int size, int sample, double *startData, int *imageData, unsigned char * backgroundData, bool directLighting, double value, double reflectance, int fractalType, double minSize, double ia, double ja, int maxDepth, int backgroundWidth, int backgroundHeight, double* sunDirect2, int* sunColor )
+__global__
+void generateMandelboxPoint( int start, int stride, int aliasIndex, int numAlias, int bx, int by, int xSize, int ySize, int size, int sample, double *startData, int *imageData, unsigned char * backgroundData, bool directLighting, double value, double reflectance, int fractalType, double minSize, double ia, double ja, int maxDepth, int backgroundWidth, int backgroundHeight, double* sunDirect2, int* sunColor )
 {
+  int idx1 = blockIdx.x * blockDim.x + threadIdx.x;
   int idx2 = 7 * ( idx1 * numAlias * numAlias + aliasIndex );
   int idx = idx1*stride + start;
   int yPixel = by + idx / xSize;
@@ -515,10 +532,31 @@ void generateMandelboxPoint( int start, int stride, int idx1, int aliasIndex, in
 void MandelboxThread( int start, int stride, int bx, int by, int xSize, int ySize, int size, unsigned char * imageData, unsigned char * backgroundData, bool directLighting, double value, double minSize, double reflectance, int numSamples, int numAlias, int maxDepth, int fractalType, int backgroundWidth, int backgroundHeight, double* sunDirect, int* sunColor, ProgressBar *generatingMandelbrot )
 {
   int numToCompute = xSize*ySize/stride;
-  
-  int *imageData2 = (int*)malloc(numToCompute*3*sizeof(int));
 
-  double *startData = (double*)malloc(numToCompute*7*numAlias*numAlias*sizeof(double));
+  int blockSize = 256;
+  int numBlocks = (numToCompute+blockSize-1)/blockSize;
+
+  cudaSetDevice(start);
+  
+  int *imageData2 = (int *)malloc(numToCompute*3*sizeof(int));
+
+  int *imageDataCuda;
+  cudaMalloc((void**)&imageDataCuda, numToCompute*3*sizeof(int));
+
+  double *startDataCuda;
+  cudaMalloc((void**)&startDataCuda, numToCompute*7*numAlias*numAlias*sizeof(double));
+
+  unsigned char *backgroundDataCuda;
+  cudaMalloc((void**)&backgroundDataCuda, backgroundWidth*backgroundHeight*4*sizeof(unsigned char));
+  cudaMemcpy(backgroundDataCuda,backgroundData,backgroundWidth*backgroundHeight*4*sizeof(unsigned char),cudaMemcpyHostToDevice);
+
+  double *sunDirectCuda;
+  cudaMalloc((void**)&sunDirectCuda, 3*sizeof(double));
+  cudaMemcpy(sunDirectCuda,sunDirect,3*sizeof(double),cudaMemcpyHostToDevice);
+
+  int *sunColorCuda;
+  cudaMalloc((void**)&sunColorCuda, 3*sizeof(int));
+  cudaMemcpy(sunColorCuda,sunColor,3*sizeof(int),cudaMemcpyHostToDevice);
 
   for( int sample = 0; sample++ < numSamples; )
   {
@@ -529,15 +567,16 @@ void MandelboxThread( int start, int stride, int bx, int by, int xSize, int ySiz
         double ia1 = (double)ia / (double)numAlias;
         double ja1 = (double)ja / (double)numAlias;
 
-        for( int index = 0; index < numToCompute; ++index )
-        {
-          generateMandelboxPoint( start, stride, index, aliasIndex, numAlias, bx, by, xSize, ySize, size, sample, startData, imageData2, backgroundData, directLighting, value, reflectance, fractalType, minSize, ia1, ja1, maxDepth, backgroundWidth, backgroundHeight, sunDirect, sunColor );
-        }
+        generateMandelboxPoint<<<numBlocks, blockSize>>>( start, stride, aliasIndex, numAlias, bx, by, xSize, ySize, size, sample, startDataCuda, imageDataCuda, backgroundDataCuda, directLighting, value, reflectance, fractalType, minSize, ia1, ja1, maxDepth, backgroundWidth, backgroundHeight, sunDirectCuda, sunColorCuda );
+
+        cudaDeviceSynchronize();
 
         if( start == 0 ) generatingMandelbrot->Increment();
       }
     }
   }
+
+  cudaMemcpy(imageData2,imageDataCuda,numToCompute*3*sizeof(int),cudaMemcpyDeviceToHost);
 
   for( int index = 0; index < numToCompute; ++index )
   {
@@ -561,8 +600,9 @@ void Mandelbox( string outputName, string backgroundName, bool directLighting, i
 
   unsigned char *imageData = (unsigned char *)malloc(xSize*ySize*3*sizeof(unsigned char));
 
-  int threads = sysconf(_SC_NPROCESSORS_ONLN);
+  int numGpus = 1;
 
+  int threads = numGpus;
 
   int backgroundWidth, backgroundHeight;
 

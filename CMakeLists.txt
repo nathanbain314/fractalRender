@@ -11,19 +11,29 @@ ELSE()
   pkg_check_modules(VIPS vips-cpp REQUIRED)
 ENDIF()
 
+find_package(CUDA REQUIRED)
+
+set(
+    CUDA_NVCC_FLAGS
+    ${CUDA_NVCC_FLAGS};
+    -std=c++11
+)
+
 include_directories(include)
+include_directories(/home/ec2-user/anaconda3/include/glib-2.0/)
+include_directories(/home/ec2-user/anaconda3/lib/glib-2.0/include/)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
 file(GLOB SOURCE_FILES lib/progress_bar.c++)
 
-set( EXECUTABLES Mandelbox Color )
+set( EXECUTABLES Mandelbox )
 
 set (CMAKE_CXX_STANDARD 11)
 set(VIPS_LDFLAGS pthread ${VIPS_LDFLAGS})
 
 foreach( EXECUTABLE ${EXECUTABLES} )
-    add_executable( Run${EXECUTABLE} lib/Run${EXECUTABLE}.c++ lib/${EXECUTABLE}.c++ ${SOURCE_FILES} )
+    cuda_add_executable( Run${EXECUTABLE} lib/Run${EXECUTABLE}.c++ lib/${EXECUTABLE}.cu ${SOURCE_FILES} )
     IF (WIN32)
       set(VIPS_LDFLAGS vips-cpp vips gsf-1 z jpeg xml2 fftw3 m lcms2 pangoft2-1.0 tiff png16 exif pango-1.0 freetype fontconfig gobject-2.0 gmodule-2.0 gthread-2.0 glib-2.0 intl)
       include_directories($ENV{VIPS_INCLUDE}/include $ENV{VIPS_INCLUDE}/include/glib-2.0 $ENV{VIPS_INCLUDE}/lib/glib-2.0/include)
