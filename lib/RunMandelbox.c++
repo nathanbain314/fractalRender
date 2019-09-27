@@ -15,15 +15,15 @@ int main( int argc, char **argv )
 
     ValueArg<string> rectangleArg( "r", "rectangle", "Rectangle to render", false, " ", "string", cmd );
 
-    ValueArg<double> materialArg( "m", "material", "Material reflectance", false, 0.0, "double", cmd );
+    ValueArg<float> materialArg( "m", "material", "Material reflectance", false, 0.0, "float", cmd );
 
-    ValueArg<double> valueArg( "v", "value", "Value to use in fractal equation", false, 1, "double", cmd );
+    ValueArg<float> valueArg( "v", "value", "Value to use in fractal equation", false, 1, "float", cmd );
 
     ValueArg<int> imageSizeArg( "s", "size", "Size of image", false, 256, "int", cmd );
 
     ValueArg<int> depthArg( "d", "depth", "Max depth of ray", false, 2, "int", cmd );
 
-    ValueArg<double> iterArg( "i", "iter", "Minimum iteration size to use", false, 0.001, "double", cmd );
+    ValueArg<float> iterArg( "i", "iter", "Minimum iteration size to use", false, 0.001, "float", cmd );
 
     ValueArg<int> aliasArg( "a", "numAlias", "Number of aliasing divisions", false, 1, "int", cmd );
 
@@ -43,9 +43,9 @@ int main( int argc, char **argv )
     int numAlias                      = aliasArg.getValue();
     int maxDepth                      = depthArg.getValue();
     int imageSize                     = imageSizeArg.getValue();
-    double minIter                    = iterArg.getValue();
-    double value                      = valueArg.getValue();
-    double reflectance                = materialArg.getValue();
+    float minIter                    = iterArg.getValue();
+    float value                      = valueArg.getValue();
+    float reflectance                = materialArg.getValue();
     bool directLighting               = lightingArg.getValue();
 
     int bx, by, xSize, ySize;
