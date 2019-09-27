@@ -176,6 +176,50 @@ double MengerDE( double* point, double n10 )
 }
 
 
+// Koch
+void fold( double &x, double &y, double angle )
+{
+  double a1 = cos( -angle );
+  double a2 = sin( -angle );
+
+  double d = 2.0 * min( 0.0, a1 * x + a2 * y );
+
+  x -= d * a1;
+  y -= d * a2;
+}
+
+void trifold( double *p, double angle )
+{
+  double pi = 3.14159265358979;
+  fold( p[0], p[1], pi/3.0 - cos(angle)/10.0 );
+  fold( p[0], p[1], -pi/3.0 );
+  fold( p[1], p[2], -pi/6.0 + sin(angle)/2.0 );
+  fold( p[1], p[2], pi/6.0 );
+}
+
+void tricurve( double *p, double angle )
+{
+  for( int i = 0; i < 7; ++i )
+  {
+    p[0] = 2 * p[0] - 2.6;
+    p[1] *= 2;
+    p[2] *= 2;
+
+    trifold( p, angle );
+  }
+}
+
+double kochDE( double* z, double angle )
+{
+  double p[3] = {z[0],z[1],z[2]};
+
+  p[0] += 1.5;
+
+  tricurve( p, angle );
+
+  return 0.004 * length( p ) - 0.01;
+}
+
 double de( double* z, double value, int fractalType )
 {
   switch( fractalType )
@@ -186,6 +230,8 @@ double de( double* z, double value, int fractalType )
       return MandelboxDE( z, value );
     case 2:
       return MengerDE( z, value );
+    case 3:
+      return kochDE( z, value );
   }
 
   return MandelbulbDE( z, value );
