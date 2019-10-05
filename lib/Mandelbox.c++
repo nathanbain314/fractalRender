@@ -64,13 +64,11 @@ float MandelbulbDE( float* z, float n, float &colorIteration )
 
   int k;
 
-  float limit = 1<<10;
-
   for( k = 0; k < maxIter; ++k )
   {
     r = length(z2);
 
-    if( r > limit ) break;
+    if( r > 4 ) break;
 
     float t = acos(z2[2]/r);
     float p = atan2(z2[1],z2[0]);
@@ -113,11 +111,9 @@ float MandelboxDE( float* z1, float scale, float &colorIteration )
 
   float r = sqrt(x*x+y*y+z*z);
 
-  float limit = 1<<10;
-
   for( ; iter < 100; ++iter )
   {    
-    if( r > limit ) break;
+    if( r > 1000 ) break;
 
     if (x > 1.0)
     x = 2.0 - x;
@@ -414,7 +410,7 @@ bool findHit( float *p, float* d, float value, int fractalType, float minSize, f
 
       for( int k1 = 0; k1 < 3; ++k1 )
       {
-        d[k1] = minSize/1000;
+        d[k1] = minSize;
       }
 
       computeNormal( p, d, value, fractalType, output );
