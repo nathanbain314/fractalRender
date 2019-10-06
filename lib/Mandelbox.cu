@@ -623,7 +623,7 @@ void generateMandelboxPoint( int start, int stride, int aliasIndex, int numAlias
 
             float p2[3] = {p[0],p[1],p[2]};
 
-            if( sunLight > 0 && !findHit( p2, sunDirect, value, fractalType, minSize, n2, colorIteration ) )
+            if( sunLight > 0 && !findHit( p2, sunDirect, value, fractalType, minSize, n2, colorIteration, numSteps, maxSteps ) )
             {
               for( int k1 = 0; k1 < 3; ++k1 )
               {
