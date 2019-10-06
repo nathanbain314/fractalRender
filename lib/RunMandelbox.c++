@@ -9,6 +9,8 @@ int main( int argc, char **argv )
   {
     CmdLine cmd("Renders a fractal", ' ', "2.0");
 
+    SwitchArg dontPathTraceArg( "", "raycast", "Use raycasting instead of pathtracing", cmd, false );
+
     SwitchArg lightingArg( "l", "lighting", "Use direct lighting", cmd, false );
 
     ValueArg<string> backgroundArg( "b", "background", "Background data", false, "backgrounds/desert.dat", "string", cmd);
@@ -22,6 +24,8 @@ int main( int argc, char **argv )
     ValueArg<float> colorArg( "c", "color", "Color multiplier", false, 0.0, "float", cmd );
 
     ValueArg<float> valueArg( "v", "value", "Value to use in fractal equation", false, 1, "float", cmd );
+
+    ValueArg<int> maxStepsArg( "", "maxSteps", "Max steps of ray marching", false, 500, "int", cmd );
 
     ValueArg<int> imageSizeArg( "s", "size", "Size of image", false, 256, "int", cmd );
 
@@ -47,12 +51,14 @@ int main( int argc, char **argv )
     int numSamples                    = sampleArg.getValue();
     int numAlias                      = aliasArg.getValue();
     int maxDepth                      = depthArg.getValue();
+    int maxSteps                      = maxStepsArg.getValue();
     int imageSize                     = imageSizeArg.getValue();
     float minIter                     = iterArg.getValue();
     float value                       = valueArg.getValue();
     float color                       = colorArg.getValue();
     float reflectance                 = materialArg.getValue();
     bool directLighting               = lightingArg.getValue();
+    bool dontPathTrace                = dontPathTraceArg.getValue();
 
     int bx, by, xSize, ySize;
 
@@ -76,9 +82,14 @@ int main( int argc, char **argv )
       ss >> ySize;
     }
 
+    if( dontPathTrace )
+    {
+      numSamples = 1;
+    }
+
     if( VIPS_INIT( argv[0] ) ) return( -1 );
 
-    RunMandelbox( outputName, backgroundName, gradientName, directLighting, fractalType, numSamples, numAlias, maxDepth, minIter, value, color, reflectance, imageSize, bx, by, xSize, ySize );
+    RunMandelbox( outputName, backgroundName, gradientName, directLighting, fractalType, numSamples, numAlias, maxDepth, minIter, value, color, reflectance, imageSize, bx, by, xSize, ySize, maxSteps, dontPathTrace );
   }
   catch (ArgException &e)  // catch any exceptions
   {
