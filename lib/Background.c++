@@ -1,4 +1,4 @@
-#include "Color.h"
+#include "Background.h"
 #include "progress_bar.hpp"
 
 int backgroundWidth, backgroundHeight;
@@ -93,7 +93,7 @@ void randomFromNormal( float* n, float r1, float r2 )
   normalize(n);
 }
 
-void Color( string imageName, string outputName )
+void Background( string imageName, string outputName )
 {
   VImage image = VImage::vipsload((char *)imageName.c_str());
 
@@ -192,7 +192,7 @@ void Color( string imageName, string outputName )
   data.close();
 }
 
-void RunColor( string imageName, string outputName )
+void RunBackground( string imageName, string outputName )
 {
-  Color( imageName, outputName );
+  Background( imageName, outputName );
 }

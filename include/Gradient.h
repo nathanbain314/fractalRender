@@ -20,4 +20,4 @@
 using namespace vips;
 using namespace std;
 
-void RunColor( string imageName, string outputName );
+void RunGradient( string imageName, string outputName );

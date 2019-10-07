@@ -17,7 +17,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
 file(GLOB SOURCE_FILES lib/progress_bar.c++)
 
-set( EXECUTABLES Mandelbox Color )
+set( EXECUTABLES Mandelbox Background Gradient )
 
 set (CMAKE_CXX_STANDARD 11)
 set(VIPS_LDFLAGS pthread ${VIPS_LDFLAGS})
