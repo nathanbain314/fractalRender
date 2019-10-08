@@ -659,7 +659,7 @@ void generateMandelboxPoint( int start, int stride, int aliasIndex, int numAlias
   }
 }
 
-void MandelboxThread( int start, int stride, int bx, int by, int xSize, int ySize, int size, int * imageData, float * startDataCuda, unsigned char * backgroundDataCuda, unsigned char * gradientDataCuda, bool directLighting, float value, float minSize, float color, float reflectance, int numSamples, int numAlias, int maxDepth, int fractalType, int backgroundWidth, int backgroundHeight, float* sunDirect, int* sunColor, int maxSteps, bool dontPathTrace, bool isDeepZoom, ProgressBar *generatingMandelbrot )
+void MandelboxBlock( int start, int stride, int bx, int by, int xSize, int ySize, int size, int * imageDataCuda, float * startDataCuda, unsigned char * backgroundDataCuda, unsigned char * gradientDataCuda, bool directLighting, float value, float minSize, float color, float reflectance, int numSamples, int numAlias, int maxDepth, int fractalType, int backgroundWidth, int backgroundHeight, float* sunDirectCuda, int* sunColorCuda, int maxSteps, bool dontPathTrace, bool isDeepZoom, ProgressBar *generatingMandelbrot )
 {
   int numToCompute = xSize*ySize/stride;
 
@@ -732,7 +732,7 @@ void MandelboxThread( int start, int stride, int bx, int by, int xSize, int ySiz
     
       MandelboxBlock( 0, 1, j*256, i*256, 256, 256, size, imageData2, startDataCuda, backgroundDataCuda, gradientDataCuda, directLighting, value, minSize, color, reflectance, numSamples, numAlias, maxDepth, fractalType, backgroundWidth, backgroundHeight, sunDirectCuda, sunColorCuda, maxSteps, dontPathTrace, isDeepZoom, generatingMandelbrot ); 
 
-      cudaMemcpy(imageData2,imageDataCuda,numToCompute*3*sizeof(int),cudaMemcpyDeviceToHost);
+      cudaMemcpy(imageData2,imageDataCuda,256*256*3*sizeof(int),cudaMemcpyDeviceToHost);
 
       for( int index = 0; index < 256*256; ++index )
       {
