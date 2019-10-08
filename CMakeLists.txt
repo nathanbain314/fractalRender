@@ -25,7 +25,7 @@ include_directories(/home/ec2-user/anaconda3/lib/glib-2.0/include/)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
-file(GLOB SOURCE_FILES lib/progress_bar.c++)
+file(GLOB SOURCE_FILES lib/progress_bar.c++ lib/Zoomable.c++ )
 
 set( EXECUTABLES Mandelbox )
 

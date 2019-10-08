@@ -1,4 +1,5 @@
 #include "Mandelbox.h"
+#include "Zoomable.h"
 #include "progress_bar.hpp"
 
 __device__
@@ -487,6 +488,13 @@ void generateMandelboxPoint( int start, int stride, int aliasIndex, int numAlias
 
     if( sample < 2 )
     {
+      if( !aliasIndex )
+      {
+        imageData[3*idx1+0] = 0;
+        imageData[3*idx1+1] = 0;
+        imageData[3*idx1+2] = 0;
+      }
+      
       if( findHit( p, d, value, fractalType, minSize, n, colorIteration, numSteps, maxSteps ) )
       {
         startData[idx2] = 2.0;
@@ -651,39 +659,13 @@ void generateMandelboxPoint( int start, int stride, int aliasIndex, int numAlias
   }
 }
 
-void MandelboxThread( int start, int stride, int bx, int by, int xSize, int ySize, int size, unsigned char * imageData, unsigned char * backgroundData, unsigned char * gradientData, bool directLighting, float value, float minSize, float color, float reflectance, int numSamples, int numAlias, int maxDepth, int fractalType, int backgroundWidth, int backgroundHeight, float* sunDirect, int* sunColor, int maxSteps, bool dontPathTrace, ProgressBar *generatingMandelbrot )
+void MandelboxThread( int start, int stride, int bx, int by, int xSize, int ySize, int size, int * imageData, float * startDataCuda, unsigned char * backgroundDataCuda, unsigned char * gradientDataCuda, bool directLighting, float value, float minSize, float color, float reflectance, int numSamples, int numAlias, int maxDepth, int fractalType, int backgroundWidth, int backgroundHeight, float* sunDirect, int* sunColor, int maxSteps, bool dontPathTrace, bool isDeepZoom, ProgressBar *generatingMandelbrot )
 {
   int numToCompute = xSize*ySize/stride;
 
   int blockSize = 256;
   int numBlocks = (numToCompute+blockSize-1)/blockSize;
-
-  cudaSetDevice(start);
   
-  int *imageData2 = (int *)malloc(numToCompute*3*sizeof(int));
-
-  int *imageDataCuda;
-  cudaMalloc((void**)&imageDataCuda, numToCompute*3*sizeof(int));
-
-  float *startDataCuda;
-  cudaMalloc((void**)&startDataCuda, numToCompute*8*numAlias*numAlias*sizeof(float));
-
-  unsigned char *backgroundDataCuda;
-  cudaMalloc((void**)&backgroundDataCuda, backgroundWidth*backgroundHeight*4*sizeof(unsigned char));
-  cudaMemcpy(backgroundDataCuda,backgroundData,backgroundWidth*backgroundHeight*4*sizeof(unsigned char),cudaMemcpyHostToDevice);
-
-  unsigned char *gradientDataCuda;
-  cudaMalloc((void**)&gradientDataCuda, 1024*3*sizeof(unsigned char));
-  cudaMemcpy(gradientDataCuda,gradientData,1024*3*sizeof(unsigned char),cudaMemcpyHostToDevice);
-
-  float *sunDirectCuda;
-  cudaMalloc((void**)&sunDirectCuda, 3*sizeof(float));
-  cudaMemcpy(sunDirectCuda,sunDirect,3*sizeof(float),cudaMemcpyHostToDevice);
-
-  int *sunColorCuda;
-  cudaMalloc((void**)&sunColorCuda, 3*sizeof(int));
-  cudaMemcpy(sunColorCuda,sunColor,3*sizeof(int),cudaMemcpyHostToDevice);
-
   for( int sample = 0; sample++ < numSamples; )
   {
     for( int ia = 0, aliasIndex = 0; ia < numAlias; ++ia )
@@ -697,34 +679,129 @@ void MandelboxThread( int start, int stride, int bx, int by, int xSize, int ySiz
 
         cudaDeviceSynchronize();
 
-        if( start == 0 ) generatingMandelbrot->Increment();
-      }
-    }
-  }
-
-  cudaMemcpy(imageData2,imageDataCuda,numToCompute*3*sizeof(int),cudaMemcpyDeviceToHost);
-
-  for( int index = 0; index < numToCompute; ++index )
-  {
-    int imageIndex = index*stride + start;
-    if( imageIndex < xSize*ySize )
-    {
-      for( int k1 = 0; k1 < 3; ++k1 )
-      {
-        imageData2[3*index+k1] /= (numSamples*numAlias*numAlias);
-        imageData[3*imageIndex+k1] = imageData2[3*index+k1];
+        if( !isDeepZoom && start == 0 ) generatingMandelbrot->Increment();
       }
     }
   }
 }
 
+
+void MandelboxThread( int start, int stride, int bx, int by, int xSize, int ySize, int size, unsigned char * imageData, unsigned char * backgroundData, unsigned char * gradientData, bool directLighting, float value, float minSize, float color, float reflectance, int numSamples, int numAlias, int maxDepth, int fractalType, int backgroundWidth, int backgroundHeight, float* sunDirect, int* sunColor, int maxSteps, bool dontPathTrace, bool isDeepZoom, string outputName, ProgressBar *generatingMandelbrot )
+{
+  cudaSetDevice(start);
+
+  if( isDeepZoom )
+  {
+    int numAcross = size/256;
+    int numImagesToCompute = numAcross * numAcross;
+    numImagesToCompute /= stride;
+
+    unsigned char *imageData3 = (unsigned char *)malloc(256*256*3*sizeof(unsigned char));
+
+    int *imageData2 = (int*)malloc(256*256*3*sizeof(int));
+
+    int *imageDataCuda;
+    cudaMalloc((void**)&imageDataCuda, 256*256*3*sizeof(int));
+
+    float *startDataCuda;
+    cudaMalloc((void**)&startDataCuda, 256*256*8*numAlias*numAlias*sizeof(float));
+
+    unsigned char *backgroundDataCuda;
+    cudaMalloc((void**)&backgroundDataCuda, backgroundWidth*backgroundHeight*4*sizeof(unsigned char));
+    cudaMemcpy(backgroundDataCuda,backgroundData,backgroundWidth*backgroundHeight*4*sizeof(unsigned char),cudaMemcpyHostToDevice);
+
+    unsigned char *gradientDataCuda;
+    cudaMalloc((void**)&gradientDataCuda, 1024*3*sizeof(unsigned char));
+    cudaMemcpy(gradientDataCuda,gradientData,1024*3*sizeof(unsigned char),cudaMemcpyHostToDevice);
+
+    float *sunDirectCuda;
+    cudaMalloc((void**)&sunDirectCuda, 3*sizeof(float));
+    cudaMemcpy(sunDirectCuda,sunDirect,3*sizeof(float),cudaMemcpyHostToDevice);
+
+    int *sunColorCuda;
+    cudaMalloc((void**)&sunColorCuda, 3*sizeof(int));
+    cudaMemcpy(sunColorCuda,sunColor,3*sizeof(int),cudaMemcpyHostToDevice);
+
+    if( !start ) generatingMandelbrot->Progressed(0);
+
+    for( int index1 = 0; index1 < numImagesToCompute; ++index1 )
+    {
+      int idx = index1*stride + start;
+      int i = idx/numAcross;
+      int j = idx%numAcross;
+    
+      MandelboxBlock( 0, 1, j*256, i*256, 256, 256, size, imageData2, startDataCuda, backgroundDataCuda, gradientDataCuda, directLighting, value, minSize, color, reflectance, numSamples, numAlias, maxDepth, fractalType, backgroundWidth, backgroundHeight, sunDirectCuda, sunColorCuda, maxSteps, dontPathTrace, isDeepZoom, generatingMandelbrot ); 
+
+      cudaMemcpy(imageData2,imageDataCuda,numToCompute*3*sizeof(int),cudaMemcpyDeviceToHost);
+
+      for( int index = 0; index < 256*256; ++index )
+      {
+        for( int k1 = 0; k1 < 3; ++k1 )
+        {
+          imageData2[3*index+k1] /= (numSamples*numAlias*numAlias);
+          imageData3[3*index+k1] = imageData2[3*index+k1];
+        }
+      }
+
+      if( start == 0 ) generatingMandelbrot->Increment();
+
+      VImage::new_from_memory( imageData3, 256*256*3, 256, 256, 3, VIPS_FORMAT_UCHAR ).vipssave((char *)string(outputName).append(to_string(j)+"_"+to_string(i)+".jpeg").c_str());
+    }
+  }
+  else
+  {
+    int numToCompute = xSize*ySize/stride;
+
+    int *imageData2 = (int*)malloc(numToCompute*3*sizeof(int));
+
+    int *imageDataCuda;
+    cudaMalloc((void**)&imageDataCuda, numToCompute*3*sizeof(int));
+
+    float *startDataCuda;
+    cudaMalloc((void**)&startDataCuda, numToCompute*8*numAlias*numAlias*sizeof(float));
+
+    unsigned char *backgroundDataCuda;
+    cudaMalloc((void**)&backgroundDataCuda, backgroundWidth*backgroundHeight*4*sizeof(unsigned char));
+    cudaMemcpy(backgroundDataCuda,backgroundData,backgroundWidth*backgroundHeight*4*sizeof(unsigned char),cudaMemcpyHostToDevice);
+
+    unsigned char *gradientDataCuda;
+    cudaMalloc((void**)&gradientDataCuda, 1024*3*sizeof(unsigned char));
+    cudaMemcpy(gradientDataCuda,gradientData,1024*3*sizeof(unsigned char),cudaMemcpyHostToDevice);
+
+    float *sunDirectCuda;
+    cudaMalloc((void**)&sunDirectCuda, 3*sizeof(float));
+    cudaMemcpy(sunDirectCuda,sunDirect,3*sizeof(float),cudaMemcpyHostToDevice);
+
+    int *sunColorCuda;
+    cudaMalloc((void**)&sunColorCuda, 3*sizeof(int));
+    cudaMemcpy(sunColorCuda,sunColor,3*sizeof(int),cudaMemcpyHostToDevice);
+
+    if( !start ) generatingMandelbrot->Progressed(0);
+
+    MandelboxBlock( start, stride, bx, by, xSize, ySize, size, imageDataCuda, startDataCuda, backgroundDataCuda, gradientDataCuda, directLighting, value, minSize, color, reflectance, numSamples, numAlias, maxDepth, fractalType, backgroundWidth, backgroundHeight, sunDirectCuda, sunColorCuda, maxSteps, dontPathTrace, isDeepZoom, generatingMandelbrot ); 
+
+    cudaMemcpy(imageData2,imageDataCuda,numToCompute*3*sizeof(int),cudaMemcpyDeviceToHost);
+
+    for( int index = 0; index < numToCompute; ++index )
+    {
+      int imageIndex = index*stride + start;
+      if( imageIndex < xSize*ySize )
+      {
+        for( int k1 = 0; k1 < 3; ++k1 )
+        {
+          imageData2[3*index+k1] /= (numSamples*numAlias*numAlias);
+          imageData[3*imageIndex+k1] = imageData2[3*index+k1];
+        }
+      }
+    }
+  }
+}
+
+
 void Mandelbox( string outputName, string backgroundName, string gradientName, bool directLighting, int fractalType, int numSamples, int numAlias, int maxDepth, float minIter, float value, float color, float reflectance, int imageSize, int bx, int by, int xSize, int ySize, int maxSteps, bool dontPathTrace )
 {
-  ProgressBar *generatingMandelbrot = new ProgressBar( numSamples*numAlias*numAlias, "Generating mandelbox" );
+  bool isDeepZoom = (vips_foreign_find_save( outputName.c_str() ) == NULL);
 
-  generatingMandelbrot->Progressed(0);
-
-  unsigned char *imageData = (unsigned char *)malloc(xSize*ySize*3*sizeof(unsigned char));
 
   int numGpus = 1;
 
@@ -756,22 +833,64 @@ void Mandelbox( string outputName, string backgroundName, string gradientName, b
 
   data.close();
 
-  future< void > ret[threads];
 
-  for( int k = 0; k < threads; ++k )
+
+  if( isDeepZoom )
   {
-    ret[k] = async( launch::async, &MandelboxThread, k, threads, bx, by, xSize, ySize, imageSize, imageData, backgroundData, gradientData, directLighting, value, minIter, color, reflectance, numSamples, numAlias, maxDepth, fractalType, backgroundWidth, backgroundHeight, sunDirect, sunColor, maxSteps, dontPathTrace, generatingMandelbrot ); 
-  }
+    string outputName2 = outputName;
+    outputName.append("_files/");
+    g_mkdir(outputName.c_str(), 0777);
+    outputName.append(to_string(int(ceil(log2(imageSize))))+"/");
+    g_mkdir(outputName.c_str(), 0777);
 
-  // Wait for threads to finish
-  for( int k = 0; k < threads; ++k )
+    int total = imageSize/256;
+
+    ProgressBar *generatingMandelbrot = new ProgressBar( total*total/threads, "Generating mandelbox" );
+
+    unsigned char *imageData;
+
+    future< void > ret[threads];
+
+    for( int k = 0; k < threads; ++k )
+    {
+      ret[k] = async( launch::async, &MandelboxThread, k, threads, bx, by, xSize, ySize, imageSize, imageData, backgroundData, gradientData, directLighting, value, minIter, color, reflectance, numSamples, numAlias, maxDepth, fractalType, backgroundWidth, backgroundHeight, sunDirect, sunColor, maxSteps, dontPathTrace, isDeepZoom, outputName, generatingMandelbrot ); 
+    }
+
+    // Wait for threads to finish
+    for( int k = 0; k < threads; ++k )
+    {
+      ret[k].get();
+    }
+
+    generatingMandelbrot->Finish();
+
+    RunZoomable( total, outputName2 );
+  }
+  else
   {
-    ret[k].get();
+    ProgressBar *generatingMandelbrot = new ProgressBar( numSamples*numAlias*numAlias, "Generating mandelbox" );
+
+    generatingMandelbrot->Progressed(0);
+
+    unsigned char *imageData = (unsigned char *)malloc(xSize*ySize*3*sizeof(unsigned char));
+
+    future< void > ret[threads];
+
+    for( int k = 0; k < threads; ++k )
+    {
+      ret[k] = async( launch::async, &MandelboxThread, k, threads, bx, by, xSize, ySize, imageSize, imageData, backgroundData, gradientData, directLighting, value, minIter, color, reflectance, numSamples, numAlias, maxDepth, fractalType, backgroundWidth, backgroundHeight, sunDirect, sunColor, maxSteps, dontPathTrace, isDeepZoom, outputName, generatingMandelbrot ); 
+    }
+
+    // Wait for threads to finish
+    for( int k = 0; k < threads; ++k )
+    {
+      ret[k].get();
+    }
+
+    generatingMandelbrot->Finish();
+
+    VImage::new_from_memory( imageData, xSize*ySize*3, xSize, ySize, 3, VIPS_FORMAT_UCHAR ).vipssave((char *)outputName.c_str());
   }
-
-  generatingMandelbrot->Finish();
-
-  VImage::new_from_memory( imageData, xSize*ySize*3, xSize, ySize, 3, VIPS_FORMAT_UCHAR ).vipssave((char *)outputName.c_str());
 }
 
 void RunMandelbox( string outputName, string backgroundName, string gradientName, bool directLighting, int fractalType, int numSamples, int numAlias, int maxDepth, float minIter, float value, float color, float reflectance, int imageSize, int bx, int by, int xSize, int ySize, int maxSteps, bool dontPathTrace )
