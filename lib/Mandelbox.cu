@@ -18,6 +18,12 @@ int equiProject( float* d, int backgroundWidth, int backgroundHeight )
   int j = j1;
   int i = i1;
 
+  j = min( j, backgroundWidth - 1 );
+  i = min( i, backgroundHeight - 1 );
+
+  j = max( j, 0 );
+  i = max( i, 0 );
+  
   return i * backgroundWidth + j;
 }
 
@@ -453,9 +459,9 @@ __global__
 
 void generateMandelboxPoint( int start, int stride, int aliasIndex, int numAlias, int bx, int by, int xSize, int ySize, int size, int sample, float *startData, int *imageData, unsigned char * backgroundData, unsigned char * gradientData, bool directLighting, float value, float colorMultiplier, float reflectance, int fractalType, float minSize, float ia, float ja, int maxDepth, int backgroundWidth, int backgroundHeight, float* sunDirect2, int* sunColor, int maxSteps, bool dontPathTrace )
 {
-  int idx1 = blockIdx.x * blockDim.x + threadIdx.x;
-  int idx2 = 8 * ( idx1 * numAlias * numAlias + aliasIndex );
-  int idx = idx1*stride + start;
+  size_t idx1 = blockIdx.x * blockDim.x + threadIdx.x;
+  size_t idx2 = 8 * ( idx1 * numAlias * numAlias + aliasIndex );
+  size_t idx = idx1*stride + start;
   int yPixel = by + idx / xSize;
   int xPixel = bx + idx % xSize;
 
