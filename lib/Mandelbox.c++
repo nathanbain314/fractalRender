@@ -257,6 +257,97 @@ float de( float* z, float value, int fractalType, float &colorIteration )
 }
 
 
+// Mandelbrot
+float MandelbrotDE( float cx, float cy, float value, int maxIter )
+{
+  float zx = 0.0;
+  float zy = 0.0;
+
+  float k = 0;
+
+  double d = 1000000000;
+
+  for( ; k < maxIter; ++k )
+  {
+    float nx = zx*zx - zy*zy + cx;
+    float ny = 2*zx*zy + cy;
+
+    zx = nx;
+    zy = ny;
+
+    if( zx*zx + zy*zy > 1<<20 ) break;
+  }
+
+  if(k<maxIter)
+  {
+    k = k-log2(log2(sqrt(zx*zx + zy*zy)));
+
+    while( k < 1024 ) k += 1024;
+  }
+  else
+  {
+    k = 0.0;
+  }
+
+  return k;
+}
+
+
+// JuliaSet
+float JuliaSetDE( float zx, float zy, float angle, int maxIter )
+{
+  float pi = 3.141592658979;
+
+  float cx = 0.7885*cos(angle*pi/180.0);
+  float cy = 0.7885*sin(angle*pi/180.0);
+
+  float k = 0;
+
+  double d = 1000000000;
+
+  for( ; k < maxIter; ++k )
+  {
+    float nx = zx*zx - zy*zy + cx;
+    float ny = 2*zx*zy + cy;
+
+    zx = nx;
+    zy = ny;
+
+    if( zx*zx + zy*zy > 1<<20 ) break;
+  }
+
+  if(k<maxIter)
+  {
+    k = k-log2(log2(sqrt(zx*zx + zy*zy)));
+
+    while( k < 1024 ) k += 1024;
+  }
+  else
+  {
+    k = 0.0;
+  }
+
+  return k;
+}
+
+
+
+
+
+
+
+float de2D( float i, float j, float value, int fractalType, int maxSteps )
+{
+  switch( fractalType )
+  {
+    case 4:
+      return MandelbrotDE( i, j, value, maxSteps );
+    case 5:
+      return JuliaSetDE( i, j, value, maxSteps );
+  }
+
+  return MandelbrotDE( i, j, value, maxSteps );
+}
 
 void normalize( float* n )
 {
@@ -645,6 +736,45 @@ void generateMandelboxPoint( int start, int stride, size_t idx1, int aliasIndex,
   }
 }
 
+void generate2DPoint( int start, int stride, size_t idx1, int aliasIndex, int numAlias, int bx, int by, int xSize, int ySize, int size, int *imageData, unsigned char * gradientData, float value, float colorMultiplier, int fractalType, float ia, float ja, int maxSteps )
+{
+  size_t idx2 = 8 * ( idx1 * numAlias * numAlias + aliasIndex );
+  size_t idx = idx1*stride + start;
+  int yPixel = by + idx / xSize;
+  int xPixel = bx + idx % xSize;
+
+  if( idx < xSize*ySize )
+  {
+    if( !aliasIndex )
+    {
+      imageData[3*idx1+0] = 0;
+      imageData[3*idx1+1] = 0;
+      imageData[3*idx1+2] = 0;
+    }
+
+    float i = (float)yPixel + ia - (float) size / 2.0;
+    float j = (float)xPixel + ja - (float) size / 2.0;
+
+    i /= (0.25f*size);
+    j /= (0.25f*size);
+
+    float colorIteration = de2D( j, i, value, fractalType, maxSteps );
+
+    colorIteration *= colorMultiplier;
+
+    int colorIndex = colorIteration;
+
+    colorIndex %= 1024;
+
+    colorIteration -= floor( colorIteration );
+
+    for( int k1 = 0; k1 < 3; ++k1 )
+    {
+      imageData[3*idx1+k1] += interpolate(gradientData[3*colorIndex+k1],gradientData[3*((colorIndex+1)%1024)+k1],colorIteration);
+    }
+  }
+}
+
 void MandelboxBlock( int start, int stride, int bx, int by, int xSize, int ySize, int size, int * imageData2, float * startData, unsigned char * backgroundData, unsigned char * gradientData, bool directLighting, float value, float minSize, float color, float reflectance, int numSamples, int numAlias, int maxDepth, int fractalType, int backgroundWidth, int backgroundHeight, float* sunDirect, int* sunColor, int maxSteps, bool dontPathTrace, bool isDeepZoom, ProgressBar *generatingMandelbrot )
 {
   int numToCompute = xSize*ySize/stride;
@@ -660,7 +790,14 @@ void MandelboxBlock( int start, int stride, int bx, int by, int xSize, int ySize
 
         for( int index = 0; index < numToCompute; ++index )
         {
-          generateMandelboxPoint( start, stride, index, aliasIndex, numAlias, bx, by, xSize, ySize, size, sample, startData, imageData2, backgroundData, gradientData, directLighting, value, color, reflectance, fractalType, minSize, ia1, ja1, maxDepth, backgroundWidth, backgroundHeight, sunDirect, sunColor, maxSteps, dontPathTrace );
+          if( fractalType < 4 )
+          {
+            generateMandelboxPoint( start, stride, index, aliasIndex, numAlias, bx, by, xSize, ySize, size, sample, startData, imageData2, backgroundData, gradientData, directLighting, value, color, reflectance, fractalType, minSize, ia1, ja1, maxDepth, backgroundWidth, backgroundHeight, sunDirect, sunColor, maxSteps, dontPathTrace );
+          }
+          else
+          {
+            generate2DPoint( start, stride, index, aliasIndex, numAlias, bx, by, xSize, ySize, size, imageData2, gradientData, value, color, fractalType, ia1, ja1, maxSteps );
+          }
         }
 
         if( !isDeepZoom && start == 0 ) generatingMandelbrot->Increment();
@@ -738,6 +875,7 @@ void Mandelbox( string outputName, string backgroundName, string gradientName, b
 {
   bool isDeepZoom = (vips_foreign_find_save( outputName.c_str() ) == NULL);
 
+  if( fractalType > 3 ) numSamples = 1;
 
   int threads = sysconf(_SC_NPROCESSORS_ONLN);
 
