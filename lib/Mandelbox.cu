@@ -282,8 +282,6 @@ float MandelbrotDE( float cx, float cy, float value, int maxIter )
 
   float k = 0;
 
-  double d = 1000000000;
-
   for( ; k < maxIter; ++k )
   {
     float nx = zx*zx - zy*zy + cx;
@@ -297,7 +295,7 @@ float MandelbrotDE( float cx, float cy, float value, int maxIter )
 
   if(k<maxIter)
   {
-    k = k-log2(log2(sqrt(zx*zx + zy*zy)));
+    k = k-log2f(log2f(sqrt(zx*zx + zy*zy)));
 
     while( k < 1024 ) k += 1024;
   }
@@ -321,8 +319,6 @@ float JuliaSetDE( float zx, float zy, float angle, int maxIter )
 
   float k = 0;
 
-  double d = 1000000000;
-
   for( ; k < maxIter; ++k )
   {
     float nx = zx*zx - zy*zy + cx;
@@ -336,7 +332,7 @@ float JuliaSetDE( float zx, float zy, float angle, int maxIter )
 
   if(k<maxIter)
   {
-    k = k-log2(log2(sqrt(zx*zx + zy*zy)));
+    k = k-log2f(log2f(sqrt(zx*zx + zy*zy)));
 
     while( k < 1024 ) k += 1024;
   }
@@ -769,7 +765,6 @@ __global__
 void generate2DPoint( int start, int stride, int aliasIndex, int numAlias, int bx, int by, int xSize, int ySize, int size, int *imageData, unsigned char * gradientData, float value, float colorMultiplier, int fractalType, float ia, float ja, int maxSteps )
 {
   size_t idx1 = blockIdx.x * blockDim.x + threadIdx.x;
-  size_t idx2 = 8 * ( idx1 * numAlias * numAlias + aliasIndex );
   size_t idx = idx1*stride + start;
   int yPixel = by + idx / xSize;
   int xPixel = bx + idx % xSize;
