@@ -271,6 +271,106 @@ float de( float* z, float value, int fractalType, float &colorIteration )
 
 
 
+
+
+// Mandelbrot
+__device__
+float MandelbrotDE( float cx, float cy, float value, int maxIter )
+{
+  float zx = 0.0;
+  float zy = 0.0;
+
+  float k = 0;
+
+  double d = 1000000000;
+
+  for( ; k < maxIter; ++k )
+  {
+    float nx = zx*zx - zy*zy + cx;
+    float ny = 2*zx*zy + cy;
+
+    zx = nx;
+    zy = ny;
+
+    if( zx*zx + zy*zy > 1<<20 ) break;
+  }
+
+  if(k<maxIter)
+  {
+    k = k-log2(log2(sqrt(zx*zx + zy*zy)));
+
+    while( k < 1024 ) k += 1024;
+  }
+  else
+  {
+    k = 0.0;
+  }
+
+  return k;
+}
+
+
+// JuliaSet
+__device__
+float JuliaSetDE( float zx, float zy, float angle, int maxIter )
+{
+  float pi = 3.141592658979;
+
+  float cx = 0.7885*cos(angle*pi/180.0);
+  float cy = 0.7885*sin(angle*pi/180.0);
+
+  float k = 0;
+
+  double d = 1000000000;
+
+  for( ; k < maxIter; ++k )
+  {
+    float nx = zx*zx - zy*zy + cx;
+    float ny = 2*zx*zy + cy;
+
+    zx = nx;
+    zy = ny;
+
+    if( zx*zx + zy*zy > 1<<20 ) break;
+  }
+
+  if(k<maxIter)
+  {
+    k = k-log2(log2(sqrt(zx*zx + zy*zy)));
+
+    while( k < 1024 ) k += 1024;
+  }
+  else
+  {
+    k = 0.0;
+  }
+
+  return k;
+}
+
+
+
+
+
+
+
+__device__
+float de2D( float i, float j, float value, int fractalType, int maxSteps )
+{
+  switch( fractalType )
+  {
+    case 4:
+      return MandelbrotDE( i, j, value, maxSteps );
+    case 5:
+      return JuliaSetDE( i, j, value, maxSteps );
+  }
+
+  return MandelbrotDE( i, j, value, maxSteps );
+}
+
+
+
+
 __device__
 void normalize( float* n )
 {
@@ -456,7 +556,6 @@ bool findHit( float *p, float* d, float value, int fractalType, float minSize, f
 }
 
 __global__
-
 void generateMandelboxPoint( int start, int stride, int aliasIndex, int numAlias, int bx, int by, int xSize, int ySize, int size, int sample, float *startData, int *imageData, unsigned char * backgroundData, unsigned char * gradientData, bool directLighting, float value, float colorMultiplier, float reflectance, int fractalType, float minSize, float ia, float ja, int maxDepth, int backgroundWidth, int backgroundHeight, float* sunDirect2, int* sunColor, int maxSteps, bool dontPathTrace )
 {
   size_t idx1 = blockIdx.x * blockDim.x + threadIdx.x;
@@ -665,6 +764,49 @@ void generateMandelboxPoint( int start, int stride, int aliasIndex, int numAlias
   }
 }
 
+
+__global__
+void generate2DPoint( int start, int stride, int aliasIndex, int numAlias, int bx, int by, int xSize, int ySize, int size, int *imageData, unsigned char * gradientData, float value, float colorMultiplier, int fractalType, float ia, float ja, int maxSteps )
+{
+  size_t idx1 = blockIdx.x * blockDim.x + threadIdx.x;
+  size_t idx2 = 8 * ( idx1 * numAlias * numAlias + aliasIndex );
+  size_t idx = idx1*stride + start;
+  int yPixel = by + idx / xSize;
+  int xPixel = bx + idx % xSize;
+
+  if( idx < xSize*ySize )
+  {
+    if( !aliasIndex )
+    {
+      imageData[3*idx1+0] = 0;
+      imageData[3*idx1+1] = 0;
+      imageData[3*idx1+2] = 0;
+    }
+
+    float i = (float)yPixel + ia - (float) size / 2.0;
+    float j = (float)xPixel + ja - (float) size / 2.0;
+
+    i /= (0.25f*size);
+    j /= (0.25f*size);
+
+    float colorIteration = de2D( j, i, value, fractalType, maxSteps );
+
+    colorIteration *= colorMultiplier;
+
+    int colorIndex = colorIteration;
+
+    colorIndex %= 1024;
+
+    colorIteration -= floor( colorIteration );
+
+    for( int k1 = 0; k1 < 3; ++k1 )
+    {
+      imageData[3*idx1+k1] += interpolate(gradientData[3*colorIndex+k1],gradientData[3*((colorIndex+1)%1024)+k1],colorIteration);
+    }
+  }
+}
+
+
 void MandelboxBlock( int start, int stride, int bx, int by, int xSize, int ySize, int size, int * imageDataCuda, float * startDataCuda, unsigned char * backgroundDataCuda, unsigned char * gradientDataCuda, bool directLighting, float value, float minSize, float color, float reflectance, int numSamples, int numAlias, int maxDepth, int fractalType, int backgroundWidth, int backgroundHeight, float* sunDirectCuda, int* sunColorCuda, int maxSteps, bool dontPathTrace, bool isDeepZoom, ProgressBar *generatingMandelbrot )
 {
   int numToCompute = xSize*ySize/stride;
@@ -681,7 +823,14 @@ void MandelboxBlock( int start, int stride, int bx, int by, int xSize, int ySize
         float ia1 = (float)ia / (float)numAlias;
         float ja1 = (float)ja / (float)numAlias;
 
-        generateMandelboxPoint<<<numBlocks, blockSize>>>( start, stride, aliasIndex, numAlias, bx, by, xSize, ySize, size, sample, startDataCuda, imageDataCuda, backgroundDataCuda, gradientDataCuda, directLighting, value, color, reflectance, fractalType, minSize, ia1, ja1, maxDepth, backgroundWidth, backgroundHeight, sunDirectCuda, sunColorCuda, maxSteps, dontPathTrace );
+        if( fractalType < 4 )
+        {
+          generateMandelboxPoint<<<numBlocks, blockSize>>>( start, stride, aliasIndex, numAlias, bx, by, xSize, ySize, size, sample, startDataCuda, imageDataCuda, backgroundDataCuda, gradientDataCuda, directLighting, value, color, reflectance, fractalType, minSize, ia1, ja1, maxDepth, backgroundWidth, backgroundHeight, sunDirectCuda, sunColorCuda, maxSteps, dontPathTrace );
+        }
+        else
+        {
+          generate2DPoint<<<numBlocks, blockSize>>>( start, stride, aliasIndex, numAlias, bx, by, xSize, ySize, size, imageDataCuda, gradientDataCuda, value, color, fractalType, ia1, ja1, maxSteps );
+        }
 
         cudaDeviceSynchronize();
 
@@ -808,6 +957,7 @@ void Mandelbox( string outputName, string backgroundName, string gradientName, b
 {
   bool isDeepZoom = (vips_foreign_find_save( outputName.c_str() ) == NULL);
 
+  if( fractalType > 3 ) numSamples = 1;
 
   int numGpus = 1;
 
