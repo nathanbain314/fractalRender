@@ -1,11 +1,8 @@
 #include "Zoomable.h"
 #include "progress_bar.hpp"
 
-void RunZoomable( int size, string outputImage )
+void RunZoomable( int outputWidth, int outputHeight, string outputImage )
 {
-  int outputWidth = size*256;
-  int outputHeight = size*256;
-
   int level = (int)ceil(log2( max(outputWidth,outputHeight) ) );
 
   ofstream dzi_file;

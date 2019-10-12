@@ -20,4 +20,4 @@
 using namespace vips;
 using namespace std;
 
-void RunZoomable( int size, string outputImage );
+void RunZoomable( int outputWidth, int outputHeight, string outputImage );
