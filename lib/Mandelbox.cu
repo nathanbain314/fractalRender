@@ -95,7 +95,9 @@ float MandelbulbDE( float* z, float n, float &colorIteration )
     z2[2] = r1*cos(t*n) + z[2];
   }
 
-  colorIteration = (float)k - log2f(log2f(r));
+  colorIteration = (float)k;
+
+  if( r > 4 ) colorIteration -= log2f(log2f(r));
 
   z[2] *= -1;
 
@@ -164,7 +166,9 @@ float MandelboxDE( float* z1, float scale, float &colorIteration )
     r = sqrt(x*x+y*y+z*z);
   }
 
-  colorIteration = (float)iter - log2f(log2f(r));
+  colorIteration = (float)iter;
+
+  if( r > 1000 ) colorIteration -= log2f(log2f(r));
 
   return r/abs(sideLength*DEfactor);
 }
