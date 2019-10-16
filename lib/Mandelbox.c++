@@ -48,7 +48,15 @@ float dotProduct( float* a, float* b )
   return a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
 }
 
+void normalize( float* n )
+{
+  float l = length( n );
 
+  for( int k1 = 0; k1 < 3; ++k1 )
+  {
+    n[k1] /= l;
+  }
+}
 
 
 
@@ -199,49 +207,129 @@ float MengerDE( float* point, float n10, float &colorIteration )
 
 
 // Koch
-void fold( float &x, float &y, float angle )
+void rotationMatrix( float * rotVector, float * rotMatrix, float angle )
 {
-  float a1 = cos( -angle );
-  float a2 = sin( -angle );
+  float ax = rotVector[0];
+  float ay = rotVector[1];
+  float az = rotVector[2];
 
-  float d = 2.0 * min( 0.0f, a1 * x + a2 * y );
+  float sinTheta = sin(angle);
+  float cosTheta = cos(angle);
 
-  x -= d * a1;
-  y -= d * a2;
+  float t = 1.0f - cosTheta;
+
+  float xz = ax * az;
+  float xy = ax * ay;
+  float yz = ay * az;
+
+  rotMatrix[0] = t * ax * ax + cosTheta;
+  rotMatrix[1] = t * xy - sinTheta * az;
+  rotMatrix[2] = t * xz + sinTheta * ay;
+  rotMatrix[3] = t * xy + sinTheta * az;
+  rotMatrix[4] = t * ay * ay + cosTheta;
+  rotMatrix[5] = t * yz - sinTheta * ax;
+  rotMatrix[6] = t * xz - sinTheta * ay;
+  rotMatrix[7] = t * yz + sinTheta * ax;
+  rotMatrix[8] = t * az * az + cosTheta;
 }
 
-void trifold( float *p, float angle )
+void matrixMultiply( float * v, float * rotMatrix )
 {
-  float pi = 3.14159265358979;
-  fold( p[0], p[1], pi/3.0 - cos(angle)/10.0 );
-  fold( p[0], p[1], -pi/3.0 );
-  fold( p[1], p[2], -pi/6.0 + sin(angle)/2.0 );
-  fold( p[1], p[2], pi/6.0 );
+  float x = v[0];
+  float y = v[1];
+  float z = v[2];
+
+  v[0] = rotMatrix[0] * x + rotMatrix[1] * y + rotMatrix[2] * z;
+  v[1] = rotMatrix[3] * x + rotMatrix[4] * y + rotMatrix[5] * z;
+  v[2] = rotMatrix[6] * x + rotMatrix[7] * y + rotMatrix[8] * z;
 }
 
-void tricurve( float *p, float angle )
+float kochDE( float* p, float angle, float &colorIteration )
 {
-  for( int i = 0; i < 7; ++i )
+  float x = p[0];
+  float y = p[1];
+  float z = p[2];
+
+  float v[3];
+
+  float rotVector[3] = {1,1,1};
+  float rotMatrix[9];
+
+  normalize( rotVector );
+
+  rotationMatrix( rotVector, rotMatrix, angle );
+
+  float yOff = 0.3333333;
+  float scale = 3.0;
+  float offset[3] = {1.0,0.0,0.0};
+
+
+  float r;
+  float t;
+
+  int n = 0;
+
+  int maxIter = 100;
+
+  for( ; n < maxIter && (x*x+y*y+z*z) < 10000; ++n )
   {
-    p[0] = 2 * p[0] - 2.6;
-    p[1] *= 2;
-    p[2] *= 2;
+    x = abs(x);
+    y = abs(y);
 
-    trifold( p, angle );
+    if( y > x )
+    {
+      t = x;
+      x = y;
+      y = t;
+    }
+
+    y = yOff - abs( y - yOff );
+
+    x += 1.0/3.0;
+
+    if( z > x )
+    {
+      t = x;
+      x = z;
+      z = t;
+    }
+
+    x -= 1.0/3.0;
+
+    x -= 1.0/3.0;
+
+    if( z > x )
+    {
+      t = x;
+      x = z;
+      z = t;
+    }
+
+    x += 1.0/3.0;
+
+    x = scale * ( x - offset[0] ) + offset[0];
+    y = scale * ( y - offset[1] ) + offset[1];
+    z = scale * ( z - offset[2] ) + offset[2];
+
+    v[0] = x;
+    v[1] = y;
+    v[2] = z;
+
+    matrixMultiply( v, rotMatrix );
+
+    x = v[0];
+    y = v[1];
+    z = v[2];
+
+    r = (x*x+y*y+z*z);
   }
-}
 
-float kochDE( float* z, float angle, float &colorIteration )
-{
-  float p[3] = {z[0],z[1],z[2]};
 
-  p[0] += 1.5;
+  colorIteration = (float)n;
 
-  tricurve( p, angle );
+  if( r > 10000 ) colorIteration -= log2f(log2f(r));
 
-  colorIteration = 0;
-
-  return 0.004 * length( p ) - 0.01;
+  return abs( sqrt(x*x+y*y+z*z) - length(offset) ) * pow(scale,-n);
 }
 
 float de( float* z, float value, int fractalType, float &colorIteration )
@@ -270,7 +358,7 @@ float MandelbrotDE( float cx, float cy, float value, int maxIter )
 
   float k = 0;
 
-  double d = 1000000000;
+  float d = 1000000000;
 
   for( ; k < maxIter; ++k )
   {
@@ -308,7 +396,7 @@ float JuliaSetDE( float zx, float zy, float angle, int maxIter )
 
   float k = 0;
 
-  double d = 1000000000;
+  float d = 1000000000;
 
   for( ; k < maxIter; ++k )
   {
@@ -352,16 +440,6 @@ float de2D( float i, float j, float value, int fractalType, int maxSteps )
   }
 
   return MandelbrotDE( i, j, value, maxSteps );
-}
-
-void normalize( float* n )
-{
-  float l = length( n );
-
-  for( int k1 = 0; k1 < 3; ++k1 )
-  {
-    n[k1] /= l;
-  }
 }
 
 void computeNormal( float* p, float* d, float value, int fractalType, float *n )
@@ -629,7 +707,7 @@ void generateMandelboxPoint( int start, int stride, size_t idx1, int aliasIndex,
 
           if( dontPathTrace )
           {
-            float ashadow = 1.0 - double( numSteps ) / double( maxSteps );
+            float ashadow = 1.0 - float( numSteps ) / float( maxSteps );
 
             if( colorMultiplier > 0.0 )
             {
