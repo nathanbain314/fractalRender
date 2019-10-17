@@ -63,6 +63,7 @@ void normalize( float* n )
 // Mandelbulb
 float MandelbulbDE( float* z, float n, float &colorIteration )
 {
+//  return length(z) - 1.0;
   z[2] *= -1;
 
   float z2[3];
@@ -610,7 +611,7 @@ bool findHit( float *p, float* d, float value, int fractalType, float minSize, f
   return false;
 }
 
-void generateMandelboxPoint( int start, int stride, size_t idx1, int aliasIndex, int numAlias, int bx, int by, int xSize, int ySize, int size, int sample, float *startData, int *imageData, unsigned char * backgroundData, unsigned char * gradientData, bool directLighting, float value, float colorMultiplier, float reflectance, int fractalType, float minSize, float ia, float ja, int maxDepth, int backgroundWidth, int backgroundHeight, float* sunDirect2, int* sunColor, int maxSteps, bool dontPathTrace )
+void generateMandelboxPoint( int start, int stride, size_t idx1, int aliasIndex, int numAlias, int bx, int by, int xSize, int ySize, int size, int sample, float *startData, int *imageData, unsigned char * backgroundData, unsigned char * gradientData, bool directLighting, float value, float colorMultiplier, float reflectance, int fractalType, float minSize, float ia, float ja, int maxDepth, int backgroundWidth, int backgroundHeight, float* sunDirect2, int* sunColor, float kd1, float ks1, float ka1, float alpha1, int maxSteps, bool dontPathTrace )
 {
   size_t idx2 = 8 * ( idx1 * numAlias * numAlias + aliasIndex );
   size_t idx = idx1*stride + start;
@@ -689,8 +690,6 @@ void generateMandelboxPoint( int start, int stride, size_t idx1, int aliasIndex,
       colorIteration = startData[idx2+7];
     }
 
-
-
     if( startData[idx2] > 1.0 )
     {
       float seed[2] = { (float)(xPixel*sample)+ja, (float)(yPixel*sample)+ia };
@@ -707,7 +706,11 @@ void generateMandelboxPoint( int start, int stride, size_t idx1, int aliasIndex,
 
           if( dontPathTrace )
           {
-            float ashadow = 1.0 - float( numSteps ) / float( maxSteps );
+            float ia = 255.0 * ( 1.0 - float( numSteps ) / float( maxSteps ) );
+
+            float imd[3] = {255.0f,255.0f,255.0f};
+
+            float ims[3] = {255.0f,255.0f,255.0f};
 
             if( colorMultiplier > 0.0 )
             {
@@ -723,15 +726,28 @@ void generateMandelboxPoint( int start, int stride, size_t idx1, int aliasIndex,
 
               for( int k1 = 0; k1 < 3; ++k1 )
               {
-                imageData[3*idx1+k1] += min( 255.0f, ashadow * interpolate(gradientData[3*colorIndex+k1],gradientData[3*((colorIndex+1)%1024)+k1],colorIteration) );
+                imd[k1] = interpolate(gradientData[3*colorIndex+k1],gradientData[3*((colorIndex+1)%1024)+k1],colorIteration);
               }
             }
-            else
+
+            float ks = ks1;
+            float kd = kd1;
+            float ka = ka1;
+            float alpha = alpha1;
+
+            float sunDirect[3] = { sunDirect2[0], sunDirect2[1], sunDirect2[2] };
+
+            kd *= dotProduct( sunDirect, n );
+
+            float viewer[3] = { 0.57735026919, 0.57735026919, 0.57735026919 };
+
+            reflect( sunDirect, n );
+
+            ks *= pow( dotProduct( sunDirect, viewer ), alpha );
+
+            for( int k1 = 0; k1 < 3; ++k1 )
             {
-              for( int k1 = 0; k1 < 3; ++k1 )
-              {
-                imageData[3*idx1+k1] += ashadow * 255.0f;
-              }
+              imageData[3*idx1+k1] += min( 255.0f, max( 0.0f, ka * ia + kd * imd[k1] + ks * ims[k1] ) );
             }
 
             return;
@@ -858,7 +874,7 @@ void generate2DPoint( int start, int stride, size_t idx1, int aliasIndex, int nu
   }
 }
 
-void MandelboxBlock( int start, int stride, int bx, int by, int xSize, int ySize, int size, int * imageData2, float * startData, unsigned char * backgroundData, unsigned char * gradientData, bool directLighting, float value, float minSize, float color, float reflectance, int numSamples, int numAlias, int maxDepth, int fractalType, int backgroundWidth, int backgroundHeight, float* sunDirect, int* sunColor, int maxSteps, bool dontPathTrace, bool isDeepZoom, ProgressBar *generatingMandelbrot )
+void MandelboxBlock( int start, int stride, int bx, int by, int xSize, int ySize, int size, int * imageData2, float * startData, unsigned char * backgroundData, unsigned char * gradientData, bool directLighting, float value, float minSize, float color, float reflectance, int numSamples, int numAlias, int maxDepth, int fractalType, int backgroundWidth, int backgroundHeight, float* sunDirect, int* sunColor, float kd, float ks, float ka, float alpha, int maxSteps, bool dontPathTrace, bool isDeepZoom, ProgressBar *generatingMandelbrot )
 {
   int numToCompute = xSize*ySize/stride;
   
@@ -875,7 +891,7 @@ void MandelboxBlock( int start, int stride, int bx, int by, int xSize, int ySize
         {
           if( fractalType < 4 )
           {
-            generateMandelboxPoint( start, stride, index, aliasIndex, numAlias, bx, by, xSize, ySize, size, sample, startData, imageData2, backgroundData, gradientData, directLighting, value, color, reflectance, fractalType, minSize, ia1, ja1, maxDepth, backgroundWidth, backgroundHeight, sunDirect, sunColor, maxSteps, dontPathTrace );
+            generateMandelboxPoint( start, stride, index, aliasIndex, numAlias, bx, by, xSize, ySize, size, sample, startData, imageData2, backgroundData, gradientData, directLighting, value, color, reflectance, fractalType, minSize, ia1, ja1, maxDepth, backgroundWidth, backgroundHeight, sunDirect, sunColor, kd, ks, ka, alpha, maxSteps, dontPathTrace );
           }
           else
           {
@@ -889,7 +905,7 @@ void MandelboxBlock( int start, int stride, int bx, int by, int xSize, int ySize
   }
 }
 
-void MandelboxThread( int start, int stride, int bx, int by, int xSize, int ySize, int size, unsigned char * imageData, unsigned char * backgroundData, unsigned char * gradientData, bool directLighting, float value, float minSize, float color, float reflectance, int numSamples, int numAlias, int maxDepth, int fractalType, int backgroundWidth, int backgroundHeight, float* sunDirect, int* sunColor, int maxSteps, bool dontPathTrace, bool isDeepZoom, string outputName, ProgressBar *generatingMandelbrot )
+void MandelboxThread( int start, int stride, int bx, int by, int xSize, int ySize, int size, unsigned char * imageData, unsigned char * backgroundData, unsigned char * gradientData, bool directLighting, float value, float minSize, float color, float reflectance, int numSamples, int numAlias, int maxDepth, int fractalType, int backgroundWidth, int backgroundHeight, float* sunDirect, int* sunColor, float kd, float ks, float ka, float alpha, int maxSteps, bool dontPathTrace, bool isDeepZoom, string outputName, ProgressBar *generatingMandelbrot )
 {
   if( isDeepZoom )
   {
@@ -914,7 +930,7 @@ void MandelboxThread( int start, int stride, int bx, int by, int xSize, int ySiz
         int xSize2 = j + 256 < bx + xSize ? 256 : bx + xSize - j;
         int ySize2 = i + 256 < by + ySize ? 256 : by + ySize - i;
 
-        MandelboxBlock( 0, 1, j, i, xSize2, ySize2, size, imageData2, startData, backgroundData, gradientData, directLighting, value, minSize, color, reflectance, numSamples, numAlias, maxDepth, fractalType, backgroundWidth, backgroundHeight, sunDirect, sunColor, maxSteps, dontPathTrace, isDeepZoom, generatingMandelbrot ); 
+        MandelboxBlock( 0, 1, j, i, xSize2, ySize2, size, imageData2, startData, backgroundData, gradientData, directLighting, value, minSize, color, reflectance, numSamples, numAlias, maxDepth, fractalType, backgroundWidth, backgroundHeight, sunDirect, sunColor, kd, ks, ka, alpha, maxSteps, dontPathTrace, isDeepZoom, generatingMandelbrot ); 
 
         for( int index = 0; index < xSize2*ySize2; ++index )
         {
@@ -941,7 +957,7 @@ void MandelboxThread( int start, int stride, int bx, int by, int xSize, int ySiz
 
     if( !start ) generatingMandelbrot->Progressed(0);
 
-    MandelboxBlock( start, stride, bx, by, xSize, ySize, size, imageData2, startData, backgroundData, gradientData, directLighting, value, minSize, color, reflectance, numSamples, numAlias, maxDepth, fractalType, backgroundWidth, backgroundHeight, sunDirect, sunColor, maxSteps, dontPathTrace, isDeepZoom, generatingMandelbrot ); 
+    MandelboxBlock( start, stride, bx, by, xSize, ySize, size, imageData2, startData, backgroundData, gradientData, directLighting, value, minSize, color, reflectance, numSamples, numAlias, maxDepth, fractalType, backgroundWidth, backgroundHeight, sunDirect, sunColor, kd, ks, ka, alpha, maxSteps, dontPathTrace, isDeepZoom, generatingMandelbrot ); 
 
     for( int index = 0; index < numToCompute; ++index )
     {
@@ -958,7 +974,7 @@ void MandelboxThread( int start, int stride, int bx, int by, int xSize, int ySiz
   }
 }
 
-void Mandelbox( string outputName, string backgroundName, string gradientName, bool directLighting, int fractalType, int numSamples, int numAlias, int maxDepth, float minIter, float value, float color, float reflectance, int imageSize, int bx, int by, int xSize, int ySize, int maxSteps, bool dontPathTrace )
+void Mandelbox( string outputName, string backgroundName, string gradientName, bool directLighting, int fractalType, int numSamples, int numAlias, int maxDepth, float minIter, float value, float color, float reflectance, int imageSize, int bx, int by, int xSize, int ySize, float kd, float ks, float ka, float alpha, int maxSteps, bool dontPathTrace )
 {
   bool isDeepZoom = (vips_foreign_find_save( outputName.c_str() ) == NULL);
 
@@ -1010,7 +1026,7 @@ void Mandelbox( string outputName, string backgroundName, string gradientName, b
 
     for( int k = 0; k < threads; ++k )
     {
-      ret[k] = async( launch::async, &MandelboxThread, k, threads, bx, by, xSize, ySize, imageSize, imageData, backgroundData, gradientData, directLighting, value, minIter, color, reflectance, numSamples, numAlias, maxDepth, fractalType, backgroundWidth, backgroundHeight, sunDirect, sunColor, maxSteps, dontPathTrace, isDeepZoom, outputName, generatingMandelbrot ); 
+      ret[k] = async( launch::async, &MandelboxThread, k, threads, bx, by, xSize, ySize, imageSize, imageData, backgroundData, gradientData, directLighting, value, minIter, color, reflectance, numSamples, numAlias, maxDepth, fractalType, backgroundWidth, backgroundHeight, sunDirect, sunColor, kd, ks, ka, alpha, maxSteps, dontPathTrace, isDeepZoom, outputName, generatingMandelbrot ); 
     }
 
     // Wait for threads to finish
@@ -1035,7 +1051,7 @@ void Mandelbox( string outputName, string backgroundName, string gradientName, b
 
     for( int k = 0; k < threads; ++k )
     {
-      ret[k] = async( launch::async, &MandelboxThread, k, threads, bx, by, xSize, ySize, imageSize, imageData, backgroundData, gradientData, directLighting, value, minIter, color, reflectance, numSamples, numAlias, maxDepth, fractalType, backgroundWidth, backgroundHeight, sunDirect, sunColor, maxSteps, dontPathTrace, isDeepZoom, outputName, generatingMandelbrot ); 
+      ret[k] = async( launch::async, &MandelboxThread, k, threads, bx, by, xSize, ySize, imageSize, imageData, backgroundData, gradientData, directLighting, value, minIter, color, reflectance, numSamples, numAlias, maxDepth, fractalType, backgroundWidth, backgroundHeight, sunDirect, sunColor, kd, ks, ka, alpha, maxSteps, dontPathTrace, isDeepZoom, outputName, generatingMandelbrot ); 
     }
 
     // Wait for threads to finish
@@ -1050,7 +1066,7 @@ void Mandelbox( string outputName, string backgroundName, string gradientName, b
   }
 }
 
-void RunMandelbox( string outputName, string backgroundName, string gradientName, bool directLighting, int fractalType, int numSamples, int numAlias, int maxDepth, float minIter, float value, float color, float reflectance, int imageSize, int bx, int by, int xSize, int ySize, int maxSteps, bool dontPathTrace )
+void RunMandelbox( string outputName, string backgroundName, string gradientName, bool directLighting, int fractalType, int numSamples, int numAlias, int maxDepth, float minIter, float value, float color, float reflectance, int imageSize, int bx, int by, int xSize, int ySize, float kd, float ks, float ka, float alpha, int maxSteps, bool dontPathTrace )
 {
-  Mandelbox( outputName, backgroundName, gradientName, directLighting, fractalType, numSamples, numAlias, maxDepth, minIter, value, color, reflectance, imageSize, bx, by, xSize, ySize, maxSteps, dontPathTrace );
+  Mandelbox( outputName, backgroundName, gradientName, directLighting, fractalType, numSamples, numAlias, maxDepth, minIter, value, color, reflectance, imageSize, bx, by, xSize, ySize, kd, ks, ka, alpha, maxSteps, dontPathTrace );
 }

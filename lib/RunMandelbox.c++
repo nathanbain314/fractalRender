@@ -9,6 +9,8 @@ int main( int argc, char **argv )
   {
     CmdLine cmd("Renders a fractal", ' ', "2.0");
 
+    ValueArg<string> phongArg( "p", "phong", "Phong data", false, " ", "string", cmd );
+
     SwitchArg dontPathTraceArg( "", "raycast", "Use raycasting instead of pathtracing", cmd, false );
 
     SwitchArg lightingArg( "l", "lighting", "Use direct lighting", cmd, false );
@@ -47,6 +49,7 @@ int main( int argc, char **argv )
     string backgroundName             = backgroundArg.getValue();
     string gradientName               = gradientArg.getValue();
     string rectangleData              = rectangleArg.getValue();
+    string phongData                  = phongArg.getValue();
     int fractalType                   = fractalTypeArg.getValue();
     int numSamples                    = sampleArg.getValue();
     int numAlias                      = aliasArg.getValue();
@@ -82,6 +85,28 @@ int main( int argc, char **argv )
       ss >> ySize;
     }
 
+    float kd, ks, ka, alpha;
+
+    if( phongData == " " )
+    {
+      kd = 0.33333333;
+      ks = 0.33333333;
+      ka = 0.33333333;
+      alpha = 10.0;
+    }
+    else
+    {
+      stringstream ss(phongData);
+
+      ss >> kd;
+      ss.ignore();
+      ss >> ks;
+      ss.ignore();
+      ss >> ka;
+      ss.ignore();
+      ss >> alpha;
+    }
+
     if( dontPathTrace )
     {
       numSamples = 1;
@@ -89,7 +114,7 @@ int main( int argc, char **argv )
 
     if( VIPS_INIT( argv[0] ) ) return( -1 );
 
-    RunMandelbox( outputName, backgroundName, gradientName, directLighting, fractalType, numSamples, numAlias, maxDepth, minIter, value, color, reflectance, imageSize, bx, by, xSize, ySize, maxSteps, dontPathTrace );
+    RunMandelbox( outputName, backgroundName, gradientName, directLighting, fractalType, numSamples, numAlias, maxDepth, minIter, value, color, reflectance, imageSize, bx, by, xSize, ySize, kd, ks, ka, alpha, maxSteps, dontPathTrace );
   }
   catch (ArgException &e)  // catch any exceptions
   {
