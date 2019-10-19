@@ -70,6 +70,8 @@ void normalize( float* n )
 __device__
 float MandelbulbDE( float* z, float n, float &colorIteration )
 {
+  return length(z) - 1.0;
+
   z[2] *= -1;
 
   float z2[3];
@@ -460,7 +462,7 @@ float de2D( float i, float j, float value, int fractalType, int maxSteps )
 
 
 __device__
-void computeNormal( float* p, float* d, float value, int fractalType, float *n )
+void computeNormal( float* p, float minSize, float value, int fractalType, float *n )
 {
   float colorIteration;
   float t[3];
@@ -471,11 +473,11 @@ void computeNormal( float* p, float* d, float value, int fractalType, float *n )
     t[1] = p[1];
     t[2] = p[2];
 
-    t[k1] = p[k1];// + d[k1];
+    t[k1] = p[k1];;
 
     float nt = de(t,value,fractalType,colorIteration);
 
-    t[k1] = p[k1] - d[k1];
+    t[k1] = p[k1] - minSize;
     
     nt -= de(t,value,fractalType,colorIteration);
 
@@ -601,7 +603,49 @@ void reflect( float* d, float* n )
 }
 
 __device__
-bool findHit( float *p, float* d, float value, int fractalType, float minSize, float* output, float &colorIteration, int &numSteps, int maxSteps )
+bool refract( float* d, float* n )
+{
+  float nl = 1;
+  float nt = 1.5;
+
+  float cosl = dotProduct( d, n ) / ( length(d) * length(n) );
+
+  if( cosl < 0.0 )
+  {
+    cosl *= -1;
+  }
+  else
+  {
+    n[0] *= -1;
+    n[1] *= -1;
+    n[2] *= -1;
+
+    float t = nt;
+    nt = nl;
+    nl = t;
+  }
+
+  float ntl = nl / nt;
+
+  float cost = 1 - ntl*ntl * ( 1 - cosl * cosl );
+
+  if( cost < 0 )
+  {
+    return false;
+  }
+
+  for( int k1 = 0; k1 < 3; ++k1 )
+  {
+    d[k1] = ntl * d[k1] + ( ntl * cosl - sqrt( cost ) ) * n[k1];
+  }
+
+  normalize(d);
+
+  return true;
+}
+
+__device__
+bool findHit( float *p, float* d, float value, int fractalType, float minSize, float* output, float &colorIteration, int &numSteps, int maxSteps, float isRefract = false )
 {
   numSteps = 0;
 
@@ -609,23 +653,18 @@ bool findHit( float *p, float* d, float value, int fractalType, float minSize, f
   {
     float iter = de( p, value, fractalType, colorIteration );
 
-    if( iter < minSize )
+    if( ( !isRefract && iter < minSize ) || ( isRefract && iter > minSize ) )
     {
       normalize(d);
 
-      for( int k1 = 0; k1 < 3; ++k1 )
-      {
-        d[k1] = minSize;
-      }
-
-      computeNormal( p, d, value, fractalType, output );
+      computeNormal( p, minSize, value, fractalType, output );
 
       return true;
     }
 
     for( int k1 = 0; k1 < 3; ++k1 )
     {
-      p[k1] += d[k1] * iter;
+      p[k1] += d[k1] * ( isRefract ? minSize : iter );
     }
   }
 
@@ -723,6 +762,8 @@ void generateMandelboxPoint( int start, int stride, int aliasIndex, int numAlias
 
       float direct[3] = {0.0,0.0,0.0};
 
+      float isRefract = false;
+
       for( int depth = 0; depth <= maxDepth; ++depth )
       {
         if( !depth || findHit( p, d, value, fractalType, minSize, n, colorIteration, numSteps, maxSteps ) )
@@ -784,17 +825,40 @@ void generateMandelboxPoint( int start, int stride, int aliasIndex, int numAlias
           float r1 = sin((seed[0] * 12.9898 + seed[1] * 78.233))*43758.5453;
           r1 = r1 - floor(r1);
 
-          if( r1 < reflectance )
+          bool isDiffuse = false;
+
+          if( isDiffuse )
           {
-            reflect( d, n );
+            if( r1 < reflectance )
+            {
+              reflect( d, n );
+            }
+            else
+            {
+              d[0] = n[0];
+              d[1] = n[1];
+              d[2] = n[2];
+
+              randomFromNormal( d, seed );
+            }
           }
           else
           {
-            d[0] = n[0];
-            d[1] = n[1];
-            d[2] = n[2];
-
-            randomFromNormal( d, seed );
+            if( r1 < 0.0 )
+            {
+              reflect( d, n );
+            }
+            else
+            {
+              if( refract( d, n ) )
+              {
+                isRefract = !isRefract;
+              }
+              else
+              {
+                reflect( d, n );
+              }
+            }
           }
 
           for( int k1 = 0; k1 < 3; ++k1 )
@@ -846,9 +910,11 @@ void generateMandelboxPoint( int start, int stride, int aliasIndex, int numAlias
           int m = backgroundData[4*index+3];
           int mantissa = m - 128;
 
+          float f = ldexp(1.0f,mantissa-8);
+
           for( int k1 = 0; k1 < 3; ++k1 )
           {
-            imageData[3*idx1+k1] += min(255.0f,sunColor[k1]*direct[k1] + color[k1] * ldexp((float)backgroundData[4*index+k1],mantissa));
+            imageData[3*idx1+k1] += min(255.0f,sunColor[k1]*direct[k1] + color[k1] * 256.0f * pow( (float)backgroundData[4*index+k1] * f, 0.5f ) );
           }
 
           break;
