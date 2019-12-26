@@ -21,6 +21,8 @@ int main( int argc, char **argv )
 
     ValueArg<string> rectangleArg( "r", "rectangle", "Rectangle to render", false, " ", "string", cmd );
 
+    ValueArg<float> zoomArg( "z", "zoom", "Zoom multiplier", false, 1.0, "float", cmd );
+
     ValueArg<float> materialArg( "m", "material", "Material reflectance", false, 0.0, "float", cmd );
 
     ValueArg<float> colorArg( "c", "color", "Color multiplier", false, 0.0, "float", cmd );
@@ -34,8 +36,6 @@ int main( int argc, char **argv )
     ValueArg<int> depthArg( "d", "depth", "Max depth of ray", false, 2, "int", cmd );
 
     ValueArg<float> iterArg( "i", "iter", "Minimum iteration size to use", false, 0.001, "float", cmd );
-
-    ValueArg<int> aliasArg( "a", "numAlias", "Number of aliasing divisions", false, 1, "int", cmd );
 
     ValueArg<int> sampleArg( "n", "numSamples", "Number of samples to render", false, 100, "int", cmd );
 
@@ -52,10 +52,10 @@ int main( int argc, char **argv )
     string phongData                  = phongArg.getValue();
     int fractalType                   = fractalTypeArg.getValue();
     int numSamples                    = sampleArg.getValue();
-    int numAlias                      = aliasArg.getValue();
     int maxDepth                      = depthArg.getValue();
     int maxSteps                      = maxStepsArg.getValue();
     int imageSize                     = imageSizeArg.getValue();
+    float zoom                        = zoomArg.getValue();
     float minIter                     = iterArg.getValue();
     float value                       = valueArg.getValue();
     float color                       = colorArg.getValue();
@@ -85,6 +85,12 @@ int main( int argc, char **argv )
       ss >> ySize;
     }
 
+    imageSize *= zoom;
+    bx *= zoom;
+    by *= zoom;
+    xSize *= zoom;
+    ySize *= zoom;
+
     float kd, ks, ka, alpha;
 
     if( phongData == " " )
@@ -105,16 +111,16 @@ int main( int argc, char **argv )
       ss >> ka;
       ss.ignore();
       ss >> alpha;
-    }
 
-    if( dontPathTrace )
-    {
-      numSamples = 1;
+      float kSum = kd + ks + ka;
+      kd /= kSum;
+      ks /= kSum;
+      ka /= kSum;
     }
 
     if( VIPS_INIT( argv[0] ) ) return( -1 );
 
-    RunMandelbox( outputName, backgroundName, gradientName, directLighting, fractalType, numSamples, numAlias, maxDepth, minIter, value, color, reflectance, imageSize, bx, by, xSize, ySize, kd, ks, ka, alpha, maxSteps, dontPathTrace );
+    RunMandelbox( outputName, backgroundName, gradientName, directLighting, fractalType, numSamples, maxDepth, minIter, value, color, reflectance, imageSize, bx, by, xSize, ySize, kd, ks, ka, alpha, maxSteps, dontPathTrace );
   }
   catch (ArgException &e)  // catch any exceptions
   {
