@@ -70,7 +70,7 @@ void normalize( float* n )
 __device__
 float MandelbulbDE( float* z, float n, float &colorIteration )
 {
-  return length(z) - 1.0;
+  //return length(z) - 1.0;
 
   z[2] *= -1;
 
@@ -734,7 +734,7 @@ void generateMandelboxPoint( int start, int stride, int bx, int by, int xSize, i
 
     for( int depth = 0; depth <= maxDepth; ++depth )
     {
-      if( findHit( p, d, value, fractalType, minSize, n, colorIteration, numSteps, maxSteps ) )
+      if( findHit( p, d, value, fractalType, minSize, n, colorIteration, numSteps, maxSteps, isRefract ) )
       {
         if( depth == maxDepth ) break;
 
